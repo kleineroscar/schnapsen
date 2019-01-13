@@ -49,7 +49,7 @@ class Bot:
         for move in moves:
 
             next_state = state.next(move)
-            value, _ = ???
+            value, _ = self.value(state, best_value, best_value, depth + 1)
 
             if maximizing(state):
                 if value > best_value:
@@ -64,7 +64,7 @@ class Bot:
 
             # Prune the search tree
             # We know this state will never be chosen, so we stop evaluating its children
-            if ???:
+            if (maximizing(state) and beta <= best_value) or (not maximizing(state) and alpha >= best_value):
                 break
 
         return best_value, best_move

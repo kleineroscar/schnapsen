@@ -37,7 +37,6 @@ class Bot:
         moves = state.moves()
         chosen_move = best_move
         if random.random() < self.__non_trump_move:
-
             # IMPLEMENT: Make the best non-trump move you can. Use the best_non_trump_card method written below.
             return best_move
 
@@ -47,7 +46,6 @@ class Bot:
             chosen_move = best_move
         else:
             chosen_move = random.choice(moves)
-
 
         return chosen_move
 
