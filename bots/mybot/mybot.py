@@ -40,6 +40,7 @@ class Bot:
         return self.worst_non_trump_card(state)
       else:
         suit = str(state)[-2]
+        # suit = util.get_suit(state.get_opponents_played_card()) # NOT tested, might work
         return self.best_same_suit_card(state, suit)
     else:
       # Phase 2
