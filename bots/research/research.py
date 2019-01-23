@@ -1,3 +1,8 @@
+"""
+A Python 3.6 adaptation of Information Set Monte Carlo Tree Search.
+
+See this gist for the original code: https://gist.github.com/kjlubick/8ea239ede6a026a61f4d.
+"""
 # This is a very simple Python 2.7 implementation of the Information Set Monte Carlo Tree Search algorithm.
 # The function ISMCTS(rootstate, itermax, verbose = False) is towards the bottom of the code.
 # It aims to have the clearest and simplest possible code, and for the sake of clarity, the code
@@ -14,387 +19,259 @@
 #
 # For more information about Monte Carlo Tree Search check out our web site at www.mcts.ai
 # Also read the article accompanying this code at ***URL HERE***
+import math
+import random
 
-from math import *
-import random, sys
-from copy import deepcopy
+from api import State, engine, util
 
-class GameState:
-  """ A state of the game, i.e. the game board. These are the only functions which are
-    absolutely necessary to implement ISMCTS in any imperfect information game,
-    although they could be enhanced and made quicker, for example by using a
-    GetRandomMove() function to generate a random move during rollout.
-    By convention the players are numbered 1, 2, ..., self.numberOfPlayers.
-  """
-  def __init__(self):
-    self.numberOfPlayers = 2
-    self.playerToMove = 1
+# Strategy to function mapping.
+VALUATION_FUNCTIONS = {
+    'id': {
+        'function': lambda x: x,
+        'min': -3.0,
+        'max': 3.0,
+    },
+    'win': {
+        'function': lambda x: float(x > 0.0),
+        'min': 0.0,
+        'max': 1.0,
+    },
+    'get_at_least_2': {
+        'function': lambda x: float(x >= 2.0),
+        'min': 0.0,
+        'max': 1.0,
+    },
+    'get_at_least_3': {
+        'function': lambda x: float(x >= 3.0),
+        'min': 0.0,
+        'max': 1.0,
+    },
+    'prevent_other_player_from_getting_2': {
+        'function': lambda x: float(x > -2.0),
+        'min': 0.0,
+        'max': 1.0,
+    },
+    'prevent_other_player_from_getting_3': {
+        'function': lambda x: float(x > -3.0),
+        'min': 0.0,
+        'max': 1.0,
+    },
 
-  def GetNextPlayer(self, p):
-    """ Return the player to the left of the specified player
-    """
-    return (p % self.numberOfPlayers) + 1
+}
 
-  def Clone(self):
-    """ Create a deep clone of this game state.
-    """
-    st = GameState()
-    st.playerToMove = self.playerToMove
-    return st
 
-  def CloneAndRandomize(self, observer):
-    """ Create a deep clone of this game state, randomizing any information not visible to the specified observer player.
-    """
-    return self.Clone()
+class Bot:
+    __itermax = 5
 
-  def DoMove(self, move):
-    """ Update a state by carrying out the given move.
-      Must update playerToMove.
-    """
-    self.playerToMove = self.GetNextPlayer(self.playerToMove)
+    def __init__(self, itermax=5):
+        self.__itermax = itermax
 
-  def GetMoves(self):
-    """ Get all possible moves from this state.
-    """
-    raise NotImplementedException()
+    def get_move(self, state):
+        # type: (State) -> tuple[int, int]
+        """
+        Oh shit wadup
+        :param State state: An object representing the gamestate. This includes a link to
+            the states of all the cards, the trick and the points.
+        :return: A tuple of integers or a tuple of an integer and None,
+            indicating a move; the first indicates the card played in the trick, the second a
+            potential spouse.
+        """
+        best_move = None
+        # Return a random choice
+        return ISMCTS(state, self.__itermax)
+        # # Create player 1
+        # player1 = util.load_player("rand")
 
-  def GetResult(self, player):
-    """ Get the game result from the viewpoint of player.
-    """
-    raise NotImplementedException()
 
-  def __repr__(self):
-    """ Don't need this - but good style.
-    """
-    pass
-
-class Card:
-  """ A playing card, with rank and suit.
-    rank must be an integer between 2 and 14 inclusive (Jack=11, Queen=12, King=13, Ace=14)
-    suit must be a string of length 1, one of 'C' (Clubs), 'D' (Diamonds), 'H' (Hearts) or 'S' (Spades)
-  """
-  def __init__(self, rank, suit):
-    if rank not in range(2, 14+1):
-      raise Exception("Invalid rank")
-    if suit not in ['C', 'D', 'H', 'S']:
-      raise Exception("Invalid suit")
-    self.rank = rank
-    self.suit = suit
-
-  def __repr__(self):
-    return "??23456789TJQKA"[self.rank] + self.suit
-
-  def __eq__(self, other):
-    return self.rank == other.rank and self.suit == other.suit
-
-  def __ne__(self, other):
-    return self.rank != other.rank or self.suit != other.suit
-
-class KnockoutWhistState(GameState):
-  """ A state of the game Knockout Whist.
-    See http://www.pagat.com/whist/kowhist.html for a full description of the rules.
-    For simplicity of implementation, this version of the game does not include the "dog's life" rule
-    and the trump suit for each round is picked randomly rather than being chosen by one of the players.
-  """
-  def __init__(self, n):
-    """ Initialise the game state. n is the number of players (from 2 to 7).
-    """
-    self.numberOfPlayers = n
-    self.playerToMove   = 1
-    self.tricksInRound  = 7
-    self.playerHands    = {p:[] for p in xrange(1, self.numberOfPlayers+1)}
-    self.discards       = [] # Stores the cards that have been played already in this round
-    self.currentTrick   = []
-    self.trumpSuit      = None
-    self.tricksTaken    = {} # Number of tricks taken by each player this round
-    self.knockedOut     = {p:False for p in xrange(1, self.numberOfPlayers+1)}
-    self.Deal()
-
-  def Clone(self):
-    """ Create a deep clone of this game state.
-    """
-    st = KnockoutWhistState(self.numberOfPlayers)
-    st.playerToMove = self.playerToMove
-    st.tricksInRound = self.tricksInRound
-    st.playerHands  = deepcopy(self.playerHands)
-    st.discards     = deepcopy(self.discards)
-    st.currentTrick = deepcopy(self.currentTrick)
-    st.trumpSuit    = self.trumpSuit
-    st.tricksTaken  = deepcopy(self.tricksTaken)
-    st.knockedOut   = deepcopy(self.knockedOut)
-    return st
-
-  def CloneAndRandomize(self, observer):
-    """ Create a deep clone of this game state, randomizing any information not visible to the specified observer player.
-    """
-    st = self.Clone()
-
-    # The observer can see his own hand and the cards in the current trick, and can remember the cards played in previous tricks
-    seenCards = st.playerHands[observer] + st.discards + [card for (player,card) in st.currentTrick]
-    # The observer can't see the rest of the deck
-    unseenCards = [card for card in st.GetCardDeck() if card not in seenCards]
-
-    # Deal the unseen cards to the other players
-    random.shuffle(unseenCards)
-    for p in xrange(1, st.numberOfPlayers+1):
-      if p != observer:
-        # Deal cards to player p
-        # Store the size of player p's hand
-        numCards = len(self.playerHands[p])
-        # Give player p the first numCards unseen cards
-        st.playerHands[p] = unseenCards[ : numCards]
-        # Remove those cards from unseenCards
-        unseenCards = unseenCards[numCards : ]
-
-    return st
-
-  def GetCardDeck(self):
-    """ Construct a standard deck of 52 cards.
-    """
-    return [Card(rank, suit) for rank in xrange(2, 14+1) for suit in ['C', 'D', 'H', 'S']]
-
-  def Deal(self):
-    """ Reset the game state for the beginning of a new round, and deal the cards.
-    """
-    self.discards = []
-    self.currentTrick = []
-    self.tricksTaken = {p:0 for p in xrange(1, self.numberOfPlayers+1)}
-
-    # Construct a deck, shuffle it, and deal it to the players
-    deck = self.GetCardDeck()
-    random.shuffle(deck)
-    for p in xrange(1, self.numberOfPlayers+1):
-      self.playerHands[p] = deck[ : self.tricksInRound]
-      deck = deck[self.tricksInRound : ]
-
-    # Choose the trump suit for this round
-    self.trumpSuit = random.choice(['C', 'D', 'H', 'S'])
-
-  def GetNextPlayer(self, p):
-    """ Return the player to the left of the specified player, skipping players who have been knocked out
-    """
-    next = (p % self.numberOfPlayers) + 1
-    # Skip any knocked-out players
-    while next != p and self.knockedOut[next]:
-      next = (next % self.numberOfPlayers) + 1
-    return next
-
-  def DoMove(self, move):
-    """ Update a state by carrying out the given move.
-      Must update playerToMove.
-    """
-    # Store the played card in the current trick
-    self.currentTrick.append((self.playerToMove, move))
-
-    # Remove the card from the player's hand
-    self.playerHands[self.playerToMove].remove(move)
-
-    # Find the next player
-    self.playerToMove = self.GetNextPlayer(self.playerToMove)
-
-    # If the next player has already played in this trick, then the trick is over
-    if any(True for (player, card) in self.currentTrick if player == self.playerToMove):
-      # Sort the plays in the trick: those that followed suit (in ascending rank order), then any trump plays (in ascending rank order)
-      (leader, leadCard) = self.currentTrick[0]
-      suitedPlays = [(player, card.rank) for (player, card) in self.currentTrick if card.suit == leadCard.suit]
-      trumpPlays  = [(player, card.rank) for (player, card) in self.currentTrick if card.suit == self.trumpSuit]
-      sortedPlays = sorted(suitedPlays, key = lambda (player, rank) : rank) + sorted(trumpPlays, key = lambda (player, rank) : rank)
-      # The winning play is the last element in sortedPlays
-      trickWinner = sortedPlays[-1][0]
-
-      # Update the game state
-      self.tricksTaken[trickWinner] += 1
-      self.discards += [card for (player, card) in self.currentTrick]
-      self.currentTrick = []
-      self.playerToMove = trickWinner
-
-      # If the next player's hand is empty, this round is over
-      if self.playerHands[self.playerToMove] == []:
-        self.tricksInRound -= 1
-        self.knockedOut = {p:(self.knockedOut[p] or self.tricksTaken[p] == 0) for p in xrange(1, self.numberOfPlayers+1)}
-        # If all but one players are now knocked out, the game is over
-        if len([x for x in self.knockedOut.itervalues() if x == False]) <= 1:
-          self.tricksInRound = 0
-
-        self.Deal()
-
-  def GetMoves(self):
-    """ Get all possible moves from this state.
-    """
-    hand = self.playerHands[self.playerToMove]
-    if self.currentTrick == []:
-      # May lead a trick with any card
-      return hand
-    else:
-      (leader, leadCard) = self.currentTrick[0]
-      # Must follow suit if it is possible to do so
-      cardsInSuit = [card for card in hand if card.suit == leadCard.suit]
-      if cardsInSuit != []:
-        return cardsInSuit
-      else:
-        # Can't follow suit, so can play any card
-        return hand
-
-  def GetResult(self, player):
-    """ Get the game result from the viewpoint of player.
-    """
-    return 0 if (self.knockedOut[player]) else 1
-
-  def __repr__(self):
-    """ Return a human-readable representation of the state
-    """
-    result  = "Round %i" % self.tricksInRound
-    result += " | P%i: " % self.playerToMove
-    result += ",".join(str(card) for card in self.playerHands[self.playerToMove])
-    result += " | Tricks: %i" % self.tricksTaken[self.playerToMove]
-    result += " | Trump: %s" % self.trumpSuit
-    result += " | Trick: ["
-    result += ",".join(("%i:%s" % (player, card)) for (player, card) in self.currentTrick)
-    result += "]"
-    return result
+        # return best_move
 
 class Node:
-  """ A node in the game tree. Note wins is always from the viewpoint of playerJustMoved.
-  """
-  def __init__(self, move = None, parent = None, playerJustMoved = None):
-    self.move = move # the move that got us to this node - "None" for the root node
-    self.parentNode = parent # "None" for the root node
-    self.childNodes = []
-    self.wins = 0
-    self.visits = 0
-    self.avails = 1
-    self.playerJustMoved = playerJustMoved # the only part of the state that the Node needs later
+    """
+    A node in the game tree.
 
-  def GetUntriedMoves(self, legalMoves):
-    """ Return the elements of legalMoves for which this node does not have children.
+    Note wins is always from the viewpoint of playerJustMoved.
     """
 
-    # Find all moves for which this node *does* have children
-    triedMoves = [child.move for child in self.childNodes]
+    def __init__(
+        self, move=None, parent=None, playerjustmoved=None, strategy='id'
+    ):
+        self.move = move  # the move that got us to this node - "None" for the root node
+        self.strategy = strategy
+        self.parentNode = parent  # "None" for the root node
+        self.childNodes = []
+        self.wins = 0
+        self.visits = 0
+        self.avails = 1
+        # part of the state that the Node needs later
+        self.playerJustMoved = playerjustmoved
+        self.valuation_function = VALUATION_FUNCTIONS[self.strategy]['function']
+        self._min_value = VALUATION_FUNCTIONS[self.strategy]['min']
+        self._max_value = VALUATION_FUNCTIONS[self.strategy]['max']
 
-    # Return all moves that are legal but have not been tried yet
-    return [move for move in legalMoves if move not in triedMoves]
+    def GetUntriedMoves(self, legalmoves):
+        """Return the elements of legalmoves for which this node does not have children."""
+        # Find all moves for which this node *does* have children
+        triedMoves = [child.move for child in self.childNodes]
+        # Return all moves that are legal but have not been tried yet
+        return [move for move in legalmoves if move not in triedMoves]
 
-  def UCBSelectChild(self, legalMoves, exploration = 0.7):
-    """ Use the UCB1 formula to select a child node, filtered by the given list of legal moves.
-      exploration is a constant balancing between exploitation and exploration, with default value 0.7 (approximately sqrt(2) / 2)
+    def UCBSelectChild(self, legalmoves, exploration=0.8):
+        """
+        Use the UCB1 formula to select a child node, filtered by the given list of legal moves.
+
+        `exploration` is a constant balancing between exploitation and exploration.
+        """
+        # Filter the list of children by the list of legal moves
+        legalChildren = [child for child in self.childNodes if
+                         child.move in legalmoves]
+        # Get the child with the highest UCB score.
+        # Rescale wins / visits to the range [0, 1] in case the valuation function doesn't.
+        s = max(
+            legalChildren,
+            key=lambda c:
+            (
+                float(c.wins) / float(c.visits) - self._min_value
+            ) / (self._max_value - self._min_value) +
+            exploration * math.sqrt(math.log(c.avails) / float(c.visits))
+        )
+        # Update availability counts -- it is easier to do this now than during backpropagation
+        for child in legalChildren:
+            child.avails += 1
+
+        # Return the child selected above
+        return s
+
+    def AddChild(self, m, playerJustMoved):
+        """
+        Add a new child node for the move m.
+
+        Return the added child node.
+        """
+        n = Node(
+            move=m,
+            parent=self,
+            playerjustmoved=playerJustMoved,
+            strategy=self.strategy
+        )
+        self.childNodes.append(n)
+        return n
+
+    def Update(self, terminalState):
+        """
+        Update this node.
+
+        1. Increment the visit count by one.
+        2. increase the win count by the result of terminalState for self.playerJustMoved.
+        """
+        self.visits += 1
+        if self.playerJustMoved is not None:
+            self.wins += self.valuation_function(
+                terminalState.GetResult(self.playerJustMoved))
+
+    def __repr__(self):
+        """Represent a node as a string."""
+        return '[M:{} E/W/V/A: {:.3f} / {:.2f} / {:6d} / {:6d}]'.format(
+            str(self.move).ljust(20),
+            (self.wins / self.visits),
+            self.wins,
+            self.visits,
+            self.avails,
+        )
+
+    def TreeToString(self, indent):
+        """Represent the tree as a string for debugging purposes."""
+        s = self.IndentString(indent) + str(self)
+        for c in self.childNodes:
+            s += c.TreeToString(indent + 1)
+        return s
+
+    def IndentString(self, indent):
+        """Indent a string for debugging purposes."""
+        s = "\n"
+        for i in range(1, indent + 1):
+            s += "| "
+        return s
+
+    def ChildrenToString(self):
+        """Represent children as strings for debugging purposes."""
+        s = ""
+        for c in self.childNodes:
+            s += str(c) + "\n"
+        return s
+
+
+def ISMCTS(rootstate, itermax, strategy='id', verbose=False):
     """
+    Conduct an ISMCTS search for itermax iterations starting from rootstate.
 
-    # Filter the list of children by the list of legal moves
-    legalChildren = [child for child in self.childNodes if child.move in legalMoves]
-
-    # Get the child with the highest UCB score
-    s = max(legalChildren, key = lambda c: float(c.wins)/float(c.visits) + exploration * sqrt(log(c.avails)/float(c.visits)))
-
-    # Update availability counts -- it is easier to do this now than during backpropagation
-    for child in legalChildren:
-      child.avails += 1
-
-    # Return the child selected above
-    return s
-
-  def AddChild(self, m, p):
-    """ Add a new child node for the move m.
-      Return the added child node
-    """
-    n = Node(move = m, parent = self, playerJustMoved = p)
-    self.childNodes.append(n)
-    return n
-
-  def Update(self, terminalState):
-    """ Update this node - increment the visit count by one, and increase the win count by the result of terminalState for self.playerJustMoved.
-    """
-    self.visits += 1
-    if self.playerJustMoved is not None:
-      self.wins += terminalState.GetResult(self.playerJustMoved)
-
-  def __repr__(self):
-    return "[M:%s W/V/A: %4i/%4i/%4i]" % (self.move, self.wins, self.visits, self.avails)
-
-  def TreeToString(self, indent):
-    """ Represent the tree as a string, for debugging purposes.
-    """
-    s = self.IndentString(indent) + str(self)
-    for c in self.childNodes:
-      s += c.TreeToString(indent+1)
-    return s
-
-  def IndentString(self,indent):
-    s = "\n"
-    for i in range (1,indent+1):
-      s += "| "
-    return s
-
-  def ChildrenToString(self):
-    s = ""
-    for c in self.childNodes:
-      s += str(c) + "\n"
-    return s
-
-
-def ISMCTS(rootstate, itermax, verbose = False):
-  """ Conduct an ISMCTS search for itermax iterations starting from rootstate.
     Return the best move from the rootstate.
-  """
+    """
+    rootnode = Node(strategy=strategy)
 
-  rootnode = Node()
+    for i in range(itermax):
+        node = rootnode
 
-  for i in range(itermax):
-    node = rootnode
+        # Determinize
+        # state = rootstate.CloneAndRandomize(rootstate.playerToMove)
+        mState = rootstate.clone()
+        # mState.make_assumption()
 
-    # Determinize
-    state = rootstate.CloneAndRandomize(rootstate.playerToMove)
+        # Select
+        # While: node is fully expanded and non-terminal
+        moves = mState.moves()
 
-    # Select
-    while state.GetMoves() != [] and node.GetUntriedMoves(state.GetMoves()) == []: # node is fully expanded and non-terminal
-      node = node.UCBSelectChild(state.GetMoves())
-      state.DoMove(node.move)
+        while moves != [] and node.GetUntriedMoves(legalmoves=moves) == []:
+            node = node.UCBSelectChild(legalmoves=moves)
+            mState.next(move=node.move)
 
-    # Expand
-    untriedMoves = node.GetUntriedMoves(state.GetMoves())
-    if untriedMoves != []: # if we can expand (i.e. state/node is non-terminal)
-      m = random.choice(untriedMoves)
-      player = state.playerToMove
-      state.DoMove(m)
-      node = node.AddChild(m, player) # add child and descend tree
+        # Expand
 
-    # Simulate
-    while state.GetMoves() != []: # while state is non-terminal
-      state.DoMove(random.choice(state.GetMoves()))
+        untriedMoves = node.GetUntriedMoves(legalmoves=moves)
+        # if we can expand (i.e. state/node is non-terminal)
+        if untriedMoves != []:
+            m = random.choice(untriedMoves)
+            player = mState.whose_turn()
+            mState.next(move=m)
+            node = node.AddChild(
+                m=m,
+                playerJustMoved=player
+            )  # add child and descend tree
+        # Simulate
+        # while moves != []:  # while state is non-terminal
+        #      move=random.choice(moves)
+        #      mState.next(move)
+            # moves = mState.moves()
+        # Create player 1
+        player1 = util.load_player("rand")
+        # Create player 2
+        player2 = util.load_player("rand")
 
-    # Backpropagate
-    while node != None: # backpropagate from the expanded node and work back to the root node
-      node.Update(state)
-      node = node.parentNode
+        # Play the game
+        # The game loop
+        while not mState.finished():
+            player = player1 if mState.whose_turn() == 1 else player2
+            # We introduce a state signature which essentially obscures the deck's perfect knowledge from the player
+            # given_state = state.clone(signature=state.whose_turn()) if state.get_phase() == 1 else state.clone()
+            #TODO wadup
+            move = engine.get_move(mState, player, 5000, False)
+            if engine.is_valid(move, player): # check for common mistakes
+                mState = mState.next(move)
+                if not mState.revoked() is None:
+                    print('!   Player {} revoked (made illegal move), game finished.'.format(mState.revoked()))
+            else:
+                mState.set_to_revoked()
 
-  # Output some information about the tree - can be omitted
-  if (verbose): print rootnode.TreeToString(0)
-  else: print rootnode.ChildrenToString()
+        # Backpropagate
+        while node is not None:  # backpropagate from the expanded node and work back to the root
+            node.Update(mState)
+            node = node.parentNode
 
-  return max(rootnode.childNodes, key = lambda c: c.visits).move # return the move that was most visited
 
-def PlayGame():
-  """ Play a sample game between two ISMCTS players.
-  """
-  state = KnockoutWhistState(4)
+    # Output some information about the tree - can be omitted
+    if verbose > 1.0:
+        print(rootnode.TreeToString(0))
+    elif verbose:
+        print(rootnode.ChildrenToString())
 
-  while (state.GetMoves() != []):
-    print str(state)
-    # Use different numbers of iterations (simulations, tree nodes) for different players
-    if state.playerToMove == 1:
-      m = ISMCTS(rootstate = state, itermax = 1000, verbose = False)
-    else:
-      m = ISMCTS(rootstate = state, itermax = 100, verbose = False)
-    print "Best Move: " + str(m) + "\n"
-    state.DoMove(m)
-
-  someoneWon = False
-  for p in xrange(1, state.numberOfPlayers + 1):
-    if state.GetResult(p) > 0:
-      print "Player " + str(p) + " wins!"
-      someoneWon = True
-  if not someoneWon:
-    print "Nobody wins!"
-
-if __name__ == "__main__":
-  PlayGame()
+    return max(rootnode.childNodes,
+               key=lambda c: c.visits).move  # return the most visited move
