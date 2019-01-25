@@ -56,7 +56,7 @@ class Bot:
             # IMPLEMENT: Add a function call so that 'value' will
             # contain the predicted value of 'next_state'
             # NOTE: This is different from the line in the minimax/alphabeta bot
-            value = self.heuristic(next_state)
+            value = ???
 
             if maximizing(state):
                 if value > best_value:
@@ -107,43 +107,42 @@ def features(state):
     feature_set = []
 
     # Add player 1's points to feature set
-    p1_points = state.get_points(1)
+    p1_points = ???
 
     # Add player 2's points to feature set
-    p2_points = state.get_points(2)
+    p2_points = ???
 
     # Add player 1's pending points to feature set
-    p1_pending_points = pow(state.get_pending_points(1),2)
+    p1_pending_points = ???
 
     # Add plauer 2's pending points to feature set
-    p2_pending_points = pow(state.get_pending_points(2),2)
+    p2_pending_points = ???
 
     # Get trump suit
-    trump_suit = state.get_trump_suit()
+    trump_suit = ???
 
     # Add phase to feature set
-    phase = state.get_phase()
+    phase = ???
 
     # Add stock size to feature set
-    stock_size = state.get_stock_size()
+    stock_size = ???
 
     # Add leader to feature set
-    leader = state.leader()
+    leader = ???
 
     # Add whose turn it is to feature set
-    whose_turn = state.whose_turn()
+    whose_turn = ???
 
     # Add opponent's played card to feature set
-    opponents_played_card = state.get_opponents_played_card()
+    opponents_played_card = ???
 
 
     ################## You do not need to do anything below this line ########################
 
     perspective = state.get_perspective()
 
-    # Convert the card state array containing strings, to an array of integers.
-    # The integers here just represent card state IDs. In a way they can be
-    # thought of as arbitrary, as long as they are different from each other.
+    # Perform one-hot encoding on the perspective.
+    # Learn more about one-hot here: https://machinelearningmastery.com/how-to-one-hot-encode-sequence-data-in-python/
     perspective = [card if card != 'U'   else [1, 0, 0, 0, 0, 0] for card in perspective]
     perspective = [card if card != 'S'   else [0, 1, 0, 0, 0, 0] for card in perspective]
     perspective = [card if card != 'P1H' else [0, 0, 1, 0, 0, 0] for card in perspective]
