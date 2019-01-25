@@ -166,7 +166,7 @@ class Node:
         self.visits += 1
         if self.playerJustMoved is not None:
             self.wins += self.valuation_function(
-                terminalState.GetResult(self.playerJustMoved))
+                terminalState.get_pending_points(self.playerJustMoved))
 
     def __repr__(self):
         """Represent a node as a string."""
@@ -208,63 +208,113 @@ def ISMCTS(rootstate, itermax, strategy='id', verbose=False):
     """
     rootnode = Node(strategy=strategy)
 
+    # Create player 1
+    player1 = util.load_player("rand")
+    # Create player 2
+    player2 = util.load_player("rand")
+    # Play the game
+    # The game loop
+    while not mState.finished():
+        player = player1 if mState.whose_turn() == 1 else player2
+        # We introduce a state signature which essentially obscures the deck's perfect knowledge from the player
+        # given_state = state.clone(signature=state.whose_turn()) if state.get_phase() == 1 else state.clone()
+        #TODO wadup
+        mState.make_assumption()
+        move = engine.get_move(mState, player, 5000, False)
+        if engine.is_valid(move, player): # check for common mistakes
+            mState = mState.next(move)
+            if not mState.revoked() is None:
+                print('!   Player {} revoked (made illegal move), game finished.'.format(mState.revoked()))
+        else:
+            mState.set_to_revoked()
     for i in range(itermax):
         node = rootnode
 
         # Determinize
-        # state = rootstate.CloneAndRandomize(rootstate.playerToMove)
-        mState = rootstate.clone()
-        # mState.make_assumption()
+        state = rootstate.CloneAndRandomize(rootstate.playerToMove)
 
         # Select
-        # While: node is fully expanded and non-terminal
-        moves = mState.moves()
-
-        while moves != [] and node.GetUntriedMoves(legalmoves=moves) == []:
-            node = node.UCBSelectChild(legalmoves=moves)
-            mState.next(move=node.move)
+        while state.GetMoves() != [] and node.GetUntriedMoves(state.GetMoves()) == []: # node is fully expanded and non-terminal
+            node = node.UCBSelectChild(state.GetMoves())
+            state.DoMove(node.move)
 
         # Expand
-
-        untriedMoves = node.GetUntriedMoves(legalmoves=moves)
-        # if we can expand (i.e. state/node is non-terminal)
-        if untriedMoves != []:
+        untriedMoves = node.GetUntriedMoves(state.GetMoves())
+        if untriedMoves != []: # if we can expand (i.e. state/node is non-terminal)
             m = random.choice(untriedMoves)
-            player = mState.whose_turn()
-            mState.next(move=m)
-            node = node.AddChild(
-                m=m,
-                playerJustMoved=player
-            )  # add child and descend tree
-        # Simulate
-        # while moves != []:  # while state is non-terminal
-        #      move=random.choice(moves)
-        #      mState.next(move)
-            # moves = mState.moves()
-        # Create player 1
-        player1 = util.load_player("rand")
-        # Create player 2
-        player2 = util.load_player("rand")
+            player = state.playerToMove
+            state.DoMove(m)
+            node = node.AddChild(m, player) # add child and descend tree
 
-        # Play the game
-        # The game loop
-        while not mState.finished():
-            player = player1 if mState.whose_turn() == 1 else player2
-            # We introduce a state signature which essentially obscures the deck's perfect knowledge from the player
-            # given_state = state.clone(signature=state.whose_turn()) if state.get_phase() == 1 else state.clone()
-            #TODO wadup
-            move = engine.get_move(mState, player, 5000, False)
-            if engine.is_valid(move, player): # check for common mistakes
-                mState = mState.next(move)
-                if not mState.revoked() is None:
-                    print('!   Player {} revoked (made illegal move), game finished.'.format(mState.revoked()))
-            else:
-                mState.set_to_revoked()
+        # Simulate
+        while state.GetMoves() != []: # while state is non-terminal
+            state.DoMove(random.choice(state.GetMoves()))
 
         # Backpropagate
-        while node is not None:  # backpropagate from the expanded node and work back to the root
-            node.Update(mState)
+        while node != None: # backpropagate from the expanded node and work back to the root node
+            node.Update(state)
             node = node.parentNode
+
+    # for i in range(itermax):
+    #     node = rootnode
+    #
+    #     # Determinize
+    #     # state = rootstate.CloneAndRandomize(rootstate.playerToMove)
+    #     mState = rootstate.clone()
+    #     # mState.make_assumption()
+    #
+    #     # Select
+    #     # While: node is fully expanded and non-terminal
+    #     moves = mState.moves()
+    #
+    #     while moves != [] and node.GetUntriedMoves(legalmoves=moves) == []:
+    #         node = node.UCBSelectChild(legalmoves=moves)
+    #         mState.next(move=node.move)
+    #
+    #     # Expand
+    #
+    #     untriedMoves = node.GetUntriedMoves(legalmoves=moves)
+    #     # if we can expand (i.e. state/node is non-terminal)
+    #     if untriedMoves != []:
+    #         m = random.choice(untriedMoves)
+    #         player = mState.whose_turn()
+    #         mState.next(move=m)
+    #         node = node.AddChild(
+    #             m=m,
+    #             playerJustMoved=player
+    #         )  # add child and descend tree
+    #     # Simulate
+    #     # while moves != []:  # while state is non-terminal
+    #     #      move=random.choice(moves)
+    #     #      mState.next(move)
+    #         # moves = mState.moves()
+    #     # Create player 1
+    #     player1 = util.load_player("rand")
+    #     # Create player 2
+    #     player2 = util.load_player("rand")
+    #
+    #     # Play the game
+    #     # The game loop
+    #     while not mState.finished():
+    #         player = player1 if mState.whose_turn() == 1 else player2
+    #         # We introduce a state signature which essentially obscures the deck's perfect knowledge from the player
+    #         # given_state = state.clone(signature=state.whose_turn()) if state.get_phase() == 1 else state.clone()
+    #         #TODO wadup
+    #         mState.make_assumption()
+    #         print("made assumption")
+    #         print(mState)
+    #         move = engine.get_move(mState, player, 5000, False)
+    #         if engine.is_valid(move, player): # check for common mistakes
+    #             mState = mState.next(move)
+    #             if not mState.revoked() is None:
+    #                 print('!   Player {} revoked (made illegal move), game finished.'.format(mState.revoked()))
+    #         else:
+    #             mState.set_to_revoked()
+    #
+    #     # Backpropagate
+    #     while node is not None:  # backpropagate from the expanded node and work back to the root
+    #         node.Update(mState)
+    #         node = node.parentNode
 
 
     # Output some information about the tree - can be omitted

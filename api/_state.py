@@ -22,6 +22,9 @@ class State:
 
 	__revoked = None  # type: int, None
 
+	__game_points_at_stake_p1 = None # type: int
+	__game_points_at_stake_p2 = None # type: int
+
 	def __init__(self,
 				 deck,
 				 player1s_turn,
