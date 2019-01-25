@@ -1,194 +1,122 @@
-#!/usr/bin/env python
 """
-A basic adaptive bot. This is part of the third worksheet.
-
+RandomBot -- A simple strategy: enumerates all legal moves, and picks one
+uniformly at random.
 """
 
-from api import State, util
-import random, os
-from itertools import chain
-
-from sklearn.externals import joblib
-
-# Path of the model we will use. If you make a model
-# with a different name, point this line to its path.
-DEFAULT_MODEL = os.path.dirname(os.path.realpath(__file__)) + '/model.pkl'
+# Import the API objects
+from api import State
+import datetime
+import random
+from math import log, sqrt
 
 class Bot:
 
-    __randomize = True
+    __states = [] # type : tuple(state)
+    __calc_time = 4 # type : int
+    __max_moves = 100 # type : int
+    __wins = {}
+    __plays = {}
+    __max_depth = 0
+    __C = 1.4 # larger values will encourage more exploration of the possibilies
 
-    __model = None
-
-    def __init__(self, randomize=True, model_file=DEFAULT_MODEL):
-
-        print(model_file)
-        self.__randomize = randomize
-
-        # Load the model
-        self.__model = joblib.load(model_file)
+    def __init__(self, **kwargs):
+        self.__states = []
+        self.__calc_time = datetime.timedelta(seconds = kwargs.get('time', 4))
+        self.__max_moves = kwargs.get('max_moves', 100)
+        self.__wins = {}
+        self.__plays = {}
+        self.__C = kwargs.get('C', 1.4)
 
     def get_move(self, state):
+        # type: (State) -> tuple[int, int]
+        self.__states.append(state)
+        self.__max_depth = 0
+        last_state = self.__states[-1]
+        player = last_state.whose_turn()
+        moves = last_state.moves()
 
-        val, move = self.value(state)
+        if not moves:
+            return
+        if len(moves) == 1:
+            return moves[0]
 
+        games = 0
+
+        begin = datetime.datetime.utcnow()
+        while datetime.datetime.utcnow() - begin < self.__calc_time:
+            self.run_sim()
+            games += 1
+
+        moves_states = [(m, last_state.next(m)) for m in moves]
+
+        print(games, datetime.datetime.utcnow() - begin)
+
+        percent_wins, move = max(
+            (self.__wins.get((player, S), 0) /
+             self.__plays.get((player, S), 1),
+            m)
+            for m, S in moves_states
+        )
+
+        for x in sorted(
+            ((100 * self.__wins.get((player, S), 0) /
+              self.__plays.get((player, S), 1),
+              self.__wins.get((player, S), 0),
+              self.__plays.get((player, S), 0), m)
+            for m, S in moves_states),
+            reverse=True
+        ):
+            print("{3}: {0:.2f}% ({1} / {2})").format(*x)
+
+        print("Maximum depth searched: ", self.__max_depth)
+        # Return a random choice
         return move
 
-    def value(self, state):
-        """
-        Return the value of this state and the associated move
-        :param state:
-        :return: val, move: the value of the state, and the best move.
-        """
+    def run_sim(self):
+        plays, wins = self.__plays, self.__wins
 
-        best_value = float('-inf') if maximizing(state) else float('inf')
-        best_move = None
+        visited_states = set()
+        states_copy = self.__states[:]
+        last_state = states_copy[-1]
+        player = last_state.whose_turn()
 
-        moves = state.moves()
+        expand = True
+        for i in range(1, self.__max_moves + 1):
+            moves_states = [(move, last_state.next(move)) for move in last_state.moves()]
 
-        if self.__randomize:
-            random.shuffle(moves)
-
-        for move in moves:
-
-            next_state = state.next(move)
-
-            # IMPLEMENT: Add a function call so that 'value' will
-            # contain the predicted value of 'next_state'
-            # NOTE: This is different from the line in the minimax/alphabeta bot
-            value = self.heuristic(next_state)
-
-            if maximizing(state):
-                if value > best_value:
-                    best_value = value
-                    best_move = move
+            if all(plays.get((player, S)) for move, S in moves_states):
+                log_total = log(
+                    sum(plays[(player, S)] for move, S in moves_states))
+                value, move, last_state = max(
+                    ((wins[(player, S)] / plays[(player, S)]) +
+                     self.__C * sqrt(log_total / plays[(player, S)]), move, S)
+                    for move, S in moves_states
+                )
             else:
-                if value < best_value:
-                    best_value = value
-                    best_move = move
+                move, state = random.choice(moves_states)
 
-        return best_value, best_move
+            # move = random.choice(legal)
+            # last_state = last_state.next(move)
+            states_copy.append(last_state)
 
-    def heuristic(self, state):
+            if expand and (player, last_state) not in plays:
+                expand = False
+                plays[(player, last_state)] = 0
+                wins[(player, last_state)] = 0
+                if i > self.__max_depth:
+                    self.__max_depth = i
 
-        # Convert the state to a feature vector
-        feature_vector = [features(state)]
+            visited_states.add((player, last_state))
 
-        # These are the classes: ('won', 'lost')
-        classes = list(self.__model.classes_)
+            player = last_state.whose_turn()
 
-        # Ask the model for a prediction
-        # This returns a probability for each class
-        prob = self.__model.predict_proba(feature_vector)[0]
+            winner = last_state.winner()
+            if winner != [None,None]:
+                break
 
-        # Weigh the win/loss outcomes (-1 and 1) by their probabilities
-        res = -1.0 * prob[classes.index('lost')] + 1.0 * prob[classes.index('won')]
-
-        return res
-
-def maximizing(state):
-    """
-    Whether we're the maximizing player (1) or the minimizing player (2).
-    :param state:
-    :return:
-    """
-    return state.whose_turn() == 1
-
-
-def features(state):
-    # type: (State) -> tuple[float, ...]
-    """
-    Extract features from this state. Remember that every feature vector returned should have the same length.
-
-    :param state: A state to be converted to a feature vector
-    :return: A tuple of floats: a feature vector representing this state.
-    """
-
-    feature_set = []
-
-    # Add player 1's points to feature set
-    p1_points = state.get_points(1)
-
-    # Add player 2's points to feature set
-    p2_points = state.get_points(2)
-
-    # Add player 1's pending points to feature set
-    p1_pending_points = state.get_pending_points(1)
-    print("p1: " + str(p1_pending_points))
-
-    # Add plauer 2's pending points to feature set
-    p2_pending_points = state.get_pending_points(2)
-    print("p2: " + str(p2_pending_points))
-
-    # Get trump suit
-    trump_suit = state.get_trump_suit()
-
-    # Add phase to feature set
-    phase = state.get_phase()
-
-    # Add stock size to feature set
-    stock_size = state.get_stock_size()
-
-    # Add leader to feature set
-    leader = state.leader()
-
-    # Add whose turn it is to feature set
-    whose_turn = state.whose_turn()
-
-    # Add opponent's played card to feature set
-    opponents_played_card = state.get_opponents_played_card()
-
-
-    ################## You do not need to do anything below this line ########################
-
-    perspective = state.get_perspective()
-
-    # Convert the card state array containing strings, to an array of integers.
-    # The integers here just represent card state IDs. In a way they can be
-    # thought of as arbitrary, as long as they are different from each other.
-    perspective = [card if card != 'U'   else [1, 0, 0, 0, 0, 0] for card in perspective]
-    perspective = [card if card != 'S'   else [0, 1, 0, 0, 0, 0] for card in perspective]
-    perspective = [card if card != 'P1H' else [0, 0, 1, 0, 0, 0] for card in perspective]
-    perspective = [card if card != 'P2H' else [0, 0, 0, 1, 0, 0] for card in perspective]
-    perspective = [card if card != 'P1W' else [0, 0, 0, 0, 1, 0] for card in perspective]
-    perspective = [card if card != 'P2W' else [0, 0, 0, 0, 0, 1] for card in perspective]
-
-    # Append one-hot encoded perspective to feature_set
-    feature_set += list(chain(*perspective))
-
-    # Append normalized points to feature_set
-    total_points = p1_points + p2_points
-    feature_set.append(p1_points/total_points if total_points > 0 else 0.)
-    feature_set.append(p2_points/total_points if total_points > 0 else 0.)
-
-    # Append normalized pending points to feature_set
-    total_pending_points = p1_pending_points + p2_pending_points
-    feature_set.append(p1_pending_points/total_pending_points if total_pending_points > 0 else 0.)
-    feature_set.append(p2_pending_points/total_pending_points if total_pending_points > 0 else 0.)
-
-    # Convert trump suit to id and add to feature set
-    # You don't need to add anything to this part
-    suits = ["C", "D", "H", "S"]
-    trump_suit_onehot = [0, 0, 0, 0]
-    trump_suit_onehot[suits.index(trump_suit)] = 1
-    feature_set += trump_suit_onehot
-
-    # Append one-hot encoded phase to feature set
-    feature_set += [1, 0] if phase == 1 else [0, 1]
-
-    # Append normalized stock size to feature set
-    feature_set.append(stock_size/10)
-
-    # Append one-hot encoded leader to feature set
-    feature_set += [1, 0] if leader == 1 else [0, 1]
-
-    # Append one-hot encoded whose_turn to feature set
-    feature_set += [1, 0] if whose_turn == 1 else [0, 1]
-
-    # Append one-hot encoded opponent's card to feature set
-    opponents_played_card_onehot = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    opponents_played_card_onehot[opponents_played_card if opponents_played_card is not None else 20] = 1
-    feature_set += opponents_played_card_onehot
-
-    # Return feature set
-    return feature_set
+        for player, state in visited_states:
+            if (player, states_copy) not in plays:
+                continue
+            plays[(player, states_copy)] += 1
+            if player == winner:
+                wins[(player, last_state)] += 1
