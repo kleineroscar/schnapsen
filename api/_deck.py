@@ -336,3 +336,13 @@ class Deck:
 
 	def __ne__(self, o):
 		return not (self.__card_state == o.__card_state and self.__p1_perspective == o.__p1_perspective and self.__p2_perspective == o.__p2_perspective and self.__trick == o.__trick and self.__stock == o.__stock and self.__trump_suit == o.__trump_suit and self.__signature == o.__signature)
+
+#added for testing
+	def __repr__(self):
+		rep = ''
+		for card in self.__card_state:
+			rep += str(card)
+		return rep
+
+	def __hash__(self):
+		return hash(str(self))

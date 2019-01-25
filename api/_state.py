@@ -589,8 +589,8 @@ class State:
 	def __ne__(self, o):
 		return not (self.__deck == o.__deck and self.__phase == o.__phase and self.__leads_turn == o.__leads_turn and self.__player1s_turn == o.__player1s_turn and self.__p1_points == o.__p1_points and self.__p2_points == o.__p2_points and self.__p1_pending_points == o.__p1_pending_points and self.__p2_pending_points == o.__p2_pending_points and self.__signature == o.__signature and self.__revoked == o.__revoked)
 
-	def isTalonClosed(self):
-		return self.get_phase() == 2
+	# def __cmp__(self,o):
+	# 	return self.__p1_points+self.__p2_points > o.__p1_points+o.__p2_points
 
-	# def whoClosedTalon(self):
-
+	def __hash__(self):
+		return hash(self.convert_to_json())
