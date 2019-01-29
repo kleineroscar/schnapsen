@@ -70,7 +70,13 @@ class Bot:
 
         print(games, move_time)
 
-        percent_wins, move = self.percent_max(player)
+        # percent_wins, move = self.percent_max(player)
+        percent_wins, move = max(
+            ((self.__wins.get((player, S), 0) /
+             self.__plays.get((player, S), 1),
+             p)
+            for p, S in self.__moves_states), key=lambda x: x[0]
+        )
 
         # for m,S in self.__moves_states:
         #     percentage = 100 * self.__wins.get((player, S), 0) / self.__plays.get((player, S), 1)
