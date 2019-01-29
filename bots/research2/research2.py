@@ -20,7 +20,7 @@ class Bot:
     __max_depth = 0
     __complexity = 1.4  # larger values will encourage more exploration of the possibilies
     __moves_states = {}
-    __visited_states = set()
+    # __visited_states = set()
     __avg_move_time = 0
     __total_moves = 0
     __avg_sims = 0
@@ -85,6 +85,9 @@ class Bot:
         states_copy = self.__states[:]
         last_state = states_copy[-1]
         player = last_state.whose_turn()
+        visited_states = set()
+        plays = self.__plays
+        wins = self.__wins
         # last_state = last_state.make_assumption()
 
         expand = True
@@ -92,12 +95,12 @@ class Bot:
             self.__moves_states = [(move, last_state.next(move)) for move in
                                    last_state.moves()]
 
-            if all(self.__plays.get((player, S)) for move, S in
+            if all(plays.get((player, S)) for move, S in
                    self.__moves_states):
                 log_total = log(
-                    sum(self.__plays[(player, S)] for move, S in
+                    sum(plays[(player, S)] for move, S in
                         self.__moves_states))
-                value, move, last_state = self.value_max(player, log_total)
+                value, move, last_state = self.value_max(player, log_total, wins, plays)
             else:
                 move, last_state = random.choice(self.__moves_states)
 
@@ -105,34 +108,34 @@ class Bot:
             # last_state = last_state.next(move)
             states_copy.append(last_state)
 
-            if expand and (player, last_state) not in self.__plays:
+            if expand and (player, last_state) not in plays:
                 expand = False
-                self.__plays[(player, last_state)] = 0
-                self.__wins[(player, last_state)] = 0
+                plays[(player, last_state)] = 0
+                wins[(player, last_state)] = 0
                 if i > self.__max_depth:
                     print("changed max depth to " + str(self.__max_depth))
                     self.__max_depth = i
 
-            self.__visited_states.add((player, last_state))
+            visited_states.add((player, last_state))
 
             player = last_state.whose_turn()
             winner = states_copy[-1].winner()
             if winner[0] is not None:
                 break
 
-        for v_player, v_state in self.__visited_states:
-            if (v_player, v_state) not in self.__plays:
+        for v_player, v_state in visited_states:
+            if (v_player, v_state) not in plays:
                 continue
-            self.__plays[(v_player, v_state)] += 1
+            plays[(v_player, v_state)] += 1
             if v_player == winner[0]:
-                self.__wins[(v_player, v_state)] += 1
+                wins[(v_player, v_state)] += 1
 
-    def value_max(self, player, log_total):
+    def value_max(self, player, log_total, wins, plays):
         best_combo = (-1, None, None)
         for m, S in self.__moves_states:
-            value = ((self.__wins[(player, S)] / self.__plays[(player, S)]) +
+            value = ((wins[(player, S)] / plays[(player, S)]) +
                      self.__complexity * sqrt(
-                    log_total / self.__plays[(player, S)]))
+                    log_total / plays[(player, S)]))
             if value > best_combo[0]:
                 best_combo = (value, m, S)
         return best_combo
@@ -156,7 +159,7 @@ class Bot:
         rep += '\ncomplexity: ' + str(self.__complexity)
         rep += '\nmoves states length: ' + str(len(self.__moves_states))
         rep += '\nstates length: ' + str(len(self.__states))
-        rep += '\nvisited states length: ' + str(len(self.__visited_states))
+        # rep += '\nvisited states length: ' + str(len(self.__visited_states))
         rep += '\navg move time: ' + str(self.__avg_move_time)
         rep += '\navg sims: ' + str(self.__avg_sims)
         print(rep)
