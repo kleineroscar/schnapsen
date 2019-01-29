@@ -12,8 +12,8 @@ from math import log, sqrt
 class Bot:
 
     __states = [] # type : tuple(state)
-    __calc_time = 4 # type : int
-    __max_moves = 100 # type : int
+    __calc_time = 3.5 # type : int
+    __max_moves = 10 # type : int
     __wins = {}
     __plays = {}
     __max_depth = 0
@@ -22,8 +22,8 @@ class Bot:
 
     def __init__(self, **kwargs):
         self.__states = []
-        self.__calc_time = datetime.timedelta(seconds = kwargs.get('time', 4))
-        self.__max_moves = kwargs.get('max_moves', 100)
+        self.__calc_time = datetime.timedelta(seconds = kwargs.get('time', 3.5))
+        self.__max_moves = kwargs.get('max_moves', 10)
         self.__wins = {}
         self.__plays = {}
         self.__complexity = kwargs.get('C', 1.4)
@@ -55,13 +55,13 @@ class Bot:
 
         percent_wins, move = self.percent_max(player)
 
-        for m,S in self.__moves_states:
-            percentage = 100 * self.__wins.get((player, S), 0) / self.__plays.get((player, S), 1)
-            wins = self.__wins.get((player, S), 0)
-            plays = self.__plays.get((player, S), 0)
-            print(str(plays) + ": " + str(percentage).format(".2f") + " (" + str(wins) + "/" + str(plays) + ")")
+        # for m,S in self.__moves_states:
+        #     percentage = 100 * self.__wins.get((player, S), 0) / self.__plays.get((player, S), 1)
+        #     wins = self.__wins.get((player, S), 0)
+        #     plays = self.__plays.get((player, S), 0)
+        #     print(str(plays) + ": " + str(percentage).format(".2f") + " (" + str(wins) + "/" + str(plays) + ")")
 
-        print("Maximum depth searched: ", self.__max_depth)
+        # print("Maximum depth searched: ", self.__max_depth)
         # Return a random choice
         return move
 
