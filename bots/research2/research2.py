@@ -58,15 +58,15 @@ class Bot:
 
         self.__total_sims += games
         self.__avg_sims = self.__avg_sims * (
-                self.__total_sims - 1) / self.__total_sims + (
-                                  games / self.__total_sims)
+            self.__total_sims - 1) / self.__total_sims + (
+                              games / self.__total_sims)
 
         self.__moves_states = [(m, last_state.next(m)) for m in moves]
 
         move_time = datetime.datetime.utcnow() - begin
         self.__avg_move_time = self.__avg_move_time * (
-                self.__total_moves - 1) / self.__total_moves + (
-                                       move_time / self.__total_moves)
+            self.__total_moves - 1) / self.__total_moves + (
+                                   move_time.total_seconds() / self.__total_moves)
 
         print(games, move_time)
 

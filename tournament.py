@@ -51,6 +51,7 @@ def run_tournament(options):
     print('Results:')
     for i in range(len(bots)):
         print('    bot {}: {} points'.format(bots[i], wins[i]))
+    bots[0].debug()
 
 
 if __name__ == "__main__":
