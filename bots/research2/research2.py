@@ -56,7 +56,7 @@ class Bot:
             self.run_sim()
             games += 1
 
-        self.__total_sims += games
+        self.__total_sims += 1
         self.__avg_sims = self.__avg_sims * (
             self.__total_sims - 1) / self.__total_sims + (
                               games / self.__total_sims)
@@ -100,7 +100,12 @@ class Bot:
                 log_total = log(
                     sum(plays[(player, S)] for move, S in
                         self.__moves_states))
-                value, move, last_state = self.value_max(player, log_total, wins, plays)
+                # value, move, last_state = self.value_max(player, log_total, wins, plays)
+                value, move, last_state = max(
+                    (((wins[(player, S)] / plays[(player, S)]) +
+                     self.__complexity * sqrt(log_total / plays[(player, S)]), m, S)
+                    for m, S in self.__moves_states), key=lambda x: x[0]
+                )
             else:
                 move, last_state = random.choice(self.__moves_states)
 
@@ -153,8 +158,8 @@ class Bot:
         rep = ''
         rep += 'calc time: ' + str(self.__calc_time)
         rep += '\nmax moves: ' + str(self.__max_moves)
-        rep += '\nwins: ' + str(self.__wins)
-        rep += '\nplays: ' + str(self.__plays)
+        # rep += '\nwins: ' + str(len(self.__wins))
+        # rep += '\nplays: ' + str(len(self.__plays))
         rep += '\nmax depth: ' + str(self.__max_depth)
         rep += '\ncomplexity: ' + str(self.__complexity)
         rep += '\nmoves states length: ' + str(len(self.__moves_states))
